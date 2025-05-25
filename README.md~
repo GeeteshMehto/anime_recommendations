@@ -36,7 +36,8 @@ A Flask-based RESTful API service that allows users to search for anime, get per
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/GeeteshMehto/anime_recommendations.git
+git clone https://github.com/yourusername/anime-recommendation-system.git
+cd anime-recommendation-system
 ```
 
 2. Create a `.env` file with your Neon DB credentials:
@@ -60,7 +61,8 @@ docker-compose up -d
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/GeeteshMehto/anime_recommendations.git
+git clone https://github.com/yourusername/anime-recommendation-system.git
+cd anime-recommendation-system
 ```
 
 2. Create and activate a virtual environment:
