@@ -1,0 +1,625 @@
+// Global variables
+let token = localStorage.getItem('token');
+let currentUser = JSON.parse(localStorage.getItem('user'));
+const API_BASE_URL = '';  // Empty string for same domain
+
+// DOM elements
+const sections = {
+    home: document.getElementById('homeSection'),
+    login: document.getElementById('loginSection'),
+    register: document.getElementById('registerSection'),
+    search: document.getElementById('searchSection'),
+    recommendations: document.getElementById('recommendationsSection'),
+    preferences: document.getElementById('preferencesSection'),
+    watched: document.getElementById('watchedSection')
+};
+
+// Navigation links
+document.getElementById('homeLink').addEventListener('click', () => showSection('home'));
+document.getElementById('searchLink').addEventListener('click', () => showSection('search'));
+document.getElementById('recommendationsLink').addEventListener('click', () => {
+    if (isAuthenticated()) {
+        showSection('recommendations');
+        loadRecommendations();
+    } else {
+        showAlert('Please login to view recommendations', 'warning');
+        showSection('login');
+    }
+});
+document.getElementById('preferencesLink').addEventListener('click', () => {
+    if (isAuthenticated()) {
+        showSection('preferences');
+        loadUserPreferences();
+    } else {
+        showAlert('Please login to manage preferences', 'warning');
+        showSection('login');
+    }
+});
+document.getElementById('watchedLink').addEventListener('click', () => {
+    if (isAuthenticated()) {
+        showSection('watched');
+        loadWatchedAnime();
+    } else {
+        showAlert('Please login to view watched anime', 'warning');
+        showSection('login');
+    }
+});
+document.getElementById('loginLink').addEventListener('click', () => showSection('login'));
+document.getElementById('registerLink').addEventListener('click', () => showSection('register'));
+document.getElementById('logoutLink').addEventListener('click', logout);
+document.getElementById('homeLoginBtn').addEventListener('click', () => showSection('login'));
+document.getElementById('homeRegisterBtn').addEventListener('click', () => showSection('register'));
+document.getElementById('loginToRegisterLink').addEventListener('click', () => showSection('register'));
+document.getElementById('registerToLoginLink').addEventListener('click', () => showSection('login'));
+
+// Form submissions
+document.getElementById('registerForm').addEventListener('submit', register);
+document.getElementById('loginForm').addEventListener('submit', login);
+document.getElementById('searchForm').addEventListener('submit', searchAnime);
+document.getElementById('addPreferenceForm').addEventListener('submit', addPreference);
+
+// Check authentication status on page load
+// Check authentication status on page load
+function checkAuth() {
+    const homeAuthButtons = document.getElementById('homeAuthButtons');
+    const homeLoggedInMessage = document.getElementById('homeLoggedInMessage');
+
+    if (isAuthenticated()) {
+        document.getElementById('loginLink').style.display = 'none';
+        document.getElementById('registerLink').style.display = 'none';
+        document.getElementById('logoutLink').style.display = 'block';
+
+        // For home page elements
+        if (homeAuthButtons) homeAuthButtons.style.display = 'none';
+        if (homeLoggedInMessage) homeLoggedInMessage.style.display = 'block';
+
+    } else {
+        document.getElementById('loginLink').style.display = 'block';
+        document.getElementById('registerLink').style.display = 'block';
+        document.getElementById('logoutLink').style.display = 'none';
+
+        // For home page elements
+        if (homeAuthButtons) homeAuthButtons.style.display = 'block';
+        if (homeLoggedInMessage) homeLoggedInMessage.style.display = 'none';
+    }
+}
+// Check if user is authenticated
+function isAuthenticated() {
+    return token !== null;
+}
+
+// Show a specific section and hide others
+function showSection(sectionName) {
+    Object.keys(sections).forEach(key => {
+        sections[key].style.display = key === sectionName ? 'block' : 'none';
+    });
+}
+
+// Show alert message
+// Show alert message
+function showAlert(message, type = 'success') {
+    const alertPlaceholder = document.getElementById('alertPlaceholder'); // Get the placeholder
+    if (!alertPlaceholder) {
+        console.error("Alert placeholder not found!");
+        // Fallback to old method if placeholder is missing for some reason
+        const fallbackAlertDiv = document.createElement('div');
+        fallbackAlertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        fallbackAlertDiv.setAttribute('role', 'alert');
+        fallbackAlertDiv.style.position = 'fixed';
+        fallbackAlertDiv.style.top = '20px';
+        fallbackAlertDiv.style.right = '20px';
+        fallbackAlertDiv.style.zIndex = '9999';
+        fallbackAlertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        document.body.appendChild(fallbackAlertDiv);
+        setTimeout(() => {
+            fallbackAlertDiv.remove();
+        }, 5000);
+        return;
+    }
+
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.setAttribute('role', 'alert');
+
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    `;
+
+    alertPlaceholder.appendChild(alertDiv); // Append to the placeholder
+
+    // Auto-dismiss
+    setTimeout(() => {
+        // Check if the alert is still in the DOM before trying to remove
+        if (alertDiv.parentElement) {
+            const bsAlert = new bootstrap.Alert(alertDiv); // Get Bootstrap alert instance
+            if (bsAlert) {
+                bsAlert.close(); // Use Bootstrap's close method for proper fade-out
+            } else {
+                alertDiv.remove(); // Fallback removal
+            }
+        }
+    }, 5000);
+}
+// Register a new user
+async function register(e) {
+    e.preventDefault();
+
+    const username = document.getElementById('registerUsername').value;
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/register`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, email, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert('Registration successful! Please login.');
+            showSection('login');
+            document.getElementById('registerForm').reset();
+        } else {
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred during registration', 'danger');
+    }
+}
+
+// Login user
+// Login user
+async function login(e) {
+    e.preventDefault();
+    showLoader(); // Show loader before API call
+
+    const username = document.getElementById('loginUsername').value;
+    const password = document.getElementById('loginPassword').value;
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            token = data.access_token;
+            // Assuming your Flask backend returns user info under 'user' key in the response
+            // and you store the whole user object. Adjust if it's just username.
+            currentUser = data.user;
+
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(currentUser)); // Store user object
+
+            showAlert('Login successful!');
+            document.getElementById('loginForm').reset();
+            checkAuth(); // This will also update home page buttons
+            showSection('home'); // Navigate to home after login
+        } else {
+            showAlert(data.error || data.message || 'Login failed', 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred during login', 'danger');
+    } finally {
+        hideLoader(); // Hide loader after API call completes (success or error)
+    }
+}
+// Logout user
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    token = null;
+    currentUser = null;
+
+    showAlert('Logged out successfully');
+    showSection('home');
+    checkAuth();
+}
+
+// Search for anime
+async function searchAnime(e) {
+    e.preventDefault();
+    showLoader();
+
+    const query = document.getElementById('searchQuery').value;
+    const genre = document.getElementById('searchGenre').value;
+
+    if (!query && !genre) {
+        showAlert('Please enter a search query or select a genre', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/anime/search?query=${encodeURIComponent(query)}&genre=${encodeURIComponent(genre)}`);
+        const data = await response.json();
+
+        if (response.ok) {
+            displayAnimeResults(data.results, 'searchResults');
+        } else {
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred during search', 'danger');
+    }
+    finally {
+        hideLoader();
+    }
+}
+
+// Load user recommendations
+async function loadRecommendations() {
+    try {
+        showLoader();
+        const response = await fetch(`${API_BASE_URL}/anime/recommendations`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            displayAnimeResults(data.recommendations, 'recommendationsResults');
+        } else {
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while loading recommendations', 'danger');
+    }
+    finally {
+        hideLoader();
+    }
+}
+
+// Load user preferences
+async function loadUserPreferences() {
+    try {
+        showLoader()
+        const response = await fetch(`${API_BASE_URL}/user/preferences`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            displayUserPreferences(data.preferences);
+        } else {
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while loading preferences', 'danger');
+    }
+    finally {
+        hideLoader();
+    }
+}
+
+// Add a new preference
+async function addPreference(e) {
+    e.preventDefault();
+
+    const genre = document.getElementById('genrePreference').value;
+
+    if (!genre) {
+        showAlert('Please select a genre', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/user/preferences`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ genre })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert('Preference added successfully');
+            document.getElementById('addPreferenceForm').reset();
+            loadUserPreferences();
+        } else {
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while adding preference', 'danger');
+    }
+}
+
+// Delete a preference
+async function deletePreference(prefId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/user/preferences/${prefId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            showAlert('Preference deleted successfully');
+            loadUserPreferences();
+        } else {
+            const data = await response.json();
+            showAlert(data.error, 'danger');
+        }
+    }   catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while deleting preference', 'danger');
+    }
+}
+
+// Load watched anime
+async function loadWatchedAnime() {
+    try {
+        showLoader()
+        const response = await fetch(`${API_BASE_URL}/anime/watched`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            displayWatchedAnime(data.watched_anime);
+        } else {
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while loading watched anime', 'danger');
+    }
+    finally {
+        hideLoader();
+    }
+}
+
+// Add anime to watched list
+async function addToWatched(animeId, animeTitle) {
+    const payload = { anime_id: parseInt(animeId), anime_title: animeTitle };
+    console.log("Sending payload:", payload);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/anime/watched`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(payload)
+        });
+        console.log(token)
+        const data = await response.json();
+
+        if (response.ok) {
+            showAlert('Anime added to watched list');
+        } else {
+            showAlert(data.error || 'Failed to add anime', 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while adding to watched list', 'danger');
+    }
+}
+
+// Remove anime from watched list
+async function removeFromWatched(animeId) {
+    try {
+        const response = await fetch(`${API_BASE_URL}/anime/watched/${animeId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            showAlert('Anime removed from watched list');
+            loadWatchedAnime();
+        } else {
+            const data = await response.json();
+            showAlert(data.error, 'danger');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showAlert('An error occurred while removing from watched list', 'danger');
+    }
+}
+
+// Display anime results
+function displayAnimeResults(animeList, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+
+    if (animeList.length === 0) {
+        container.innerHTML = '<div class="col-12"><p>No results found.</p></div>';
+        return;
+    }
+
+    animeList.forEach(anime => {
+        const card = document.createElement('div');
+        card.className = 'col-md-4 col-lg-3';
+
+        // Get image URL or use placeholder if not available
+        const imageUrl = anime.coverImage?.large || 'https://via.placeholder.com/225x300?text=No+Image';
+
+        // Format genres
+        const genres = anime.genres?.map(genre =>
+            `<span class="badge bg-secondary genre-badge">${genre}</span>`
+        ).join('') || '';
+
+        // Create HTML content for the card
+        card.innerHTML = `
+            <div class="card anime-card">
+                <img src="${imageUrl}" class="card-img-top" alt="${anime.title.romaji}">
+                <div class="card-body">
+                    <h5 class="card-title">${anime.title.romaji}</h5>
+                    <div class="mb-2">${genres}</div>
+                    <p class="card-text">${anime.description || 'No description available.'}</p>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-info">Score: ${anime.averageScore || 'N/A'}</span>
+                        </div>
+                        ${isAuthenticated() ? `
+                            <button class="btn btn-primary btn-sm add-to-watched" 
+                                data-anime-id="${anime.id}" 
+                                data-anime-title="${anime.title.romaji}">
+                                Add to Watched
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    // Add event listeners to "Add to Watched" buttons
+    if (isAuthenticated()) {
+        document.querySelectorAll('.add-to-watched').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const animeId = parseInt(e.target.getAttribute('data-anime-id'));
+                const animeTitle = e.target.getAttribute('data-anime-title');
+                addToWatched(animeId, animeTitle);
+            });
+        });
+    }
+}
+
+// Display user preferences
+function displayUserPreferences(preferences) {
+    const container = document.getElementById('userPreferencesList');
+    container.innerHTML = '';
+
+    if (preferences.length === 0) {
+        container.innerHTML = '<li class="list-group-item">No preferences set yet.</li>';
+        return;
+    }
+
+    preferences.forEach(pref => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item preference-item';
+
+        item.innerHTML = `
+            <span>${pref.genre}</span>
+            <button class="btn btn-danger btn-sm delete-preference" data-pref-id="${pref.id}">
+                Remove
+            </button>
+        `;
+
+        container.appendChild(item);
+    });
+
+    // Add event listeners to delete buttons
+    document.querySelectorAll('.delete-preference').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const prefId = parseInt(e.target.getAttribute('data-pref-id'));
+            deletePreference(prefId);
+        });
+    });
+}
+
+// Display watched anime
+function displayWatchedAnime(watchedList) {
+    const container = document.getElementById('watchedResults');
+    container.innerHTML = '';
+
+    if (watchedList.length === 0) {
+        container.innerHTML = '<div class="col-12"><p>You haven\'t watched any anime yet.</p></div>';
+        return;
+    }
+
+    watchedList.forEach(watched => {
+        const card = document.createElement('div');
+        card.className = 'col-md-4 col-lg-3';
+
+        card.innerHTML = `
+            <div class="card anime-card">
+                <div class="card-body">
+                    <h5 class="card-title">${watched.anime_title}</h5>
+                    <p class="card-text">
+                        ${watched.rating ? `Your rating: ${watched.rating}/10` : 'Not rated'}
+                    </p>
+                    <p class="card-text">
+                        Watched on: ${new Date(watched.watched_at).toLocaleDateString()}
+                    </p>
+                    <button class="btn btn-danger btn-sm remove-from-watched" 
+                        data-anime-id="${watched.anime_id}">
+                        Remove from Watched
+                    </button>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(card);
+    });
+
+    // Add event listeners to "Remove from Watched" buttons
+    document.querySelectorAll('.remove-from-watched').forEach(button => {
+        button.addEventListener('click', (e) => {
+            const animeId = parseInt(e.target.getAttribute('data-anime-id'));
+            removeFromWatched(animeId);
+        });
+    });
+}
+
+
+// Add these event listeners, typically where you define other nav link listeners
+document.getElementById('homeToRecommendationsLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (isAuthenticated()) {
+        showSection('recommendations');
+        loadRecommendations();
+    } else {
+        showSection('login');
+    }
+});
+
+document.getElementById('homeToSearchLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    showSection('search');
+});
+
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function showLoader() {
+    if (loadingOverlay) loadingOverlay.style.display = 'flex';
+}
+
+function hideLoader() {
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
+}
+
+// Initialize the application
+function init() {
+    checkAuth();
+    showSection('home');
+}
+
+// Run initialization when the DOM is fully loaded
+document.addEventListener('DOMContentLoaded', init);
