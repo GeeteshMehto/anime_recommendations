@@ -1,12 +1,16 @@
 version: '3.8'
 
 services:
-  web:
-    build: .
+  anime-recommendation-system:
+    image: geetesh08/ars:latest
+    container_name: anime-recommendation-app
     ports:
       - "5000:5000"
-    env_file:
-      - .env
-    volumes:
-      - .:/app
-    restart: always
+    environment:
+      - FLASK_APP=run.py
+      - FLASK_ENV=production
+      - SECRET_KEY=${SECRET_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - ANILIST_API_URL=https://graphql.anilist.co
+    restart: unless-stopped
